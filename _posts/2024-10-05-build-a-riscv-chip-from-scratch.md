@@ -1,7 +1,7 @@
 ---
 title: Build a RISC-V Chip from scratch
 date: 2024-10-05 13:45:33 +0800
-categories: [Architecture, Tutorial]
+categories: [Tutorial, Architecture]
 tags: [riscv, design]     # TAG names should always be lowercase
 pin: false
 math: false

@@ -8,7 +8,7 @@ math: false
 mermaid: false
 ---
 
-## How `git submodue` works?
+## How `git submodule` works?
 
 
 ## `git submodule sync`
@@ -16,3 +16,8 @@ mermaid: false
 
 ## `git submodule update`
 
+
+## References
+
+* [https://iphysresearch.github.io/blog/post/programing/git/git_submodule/](https://iphysresearch.github.io/blog/post/programing/git/git_submodule/)
+* [https://git-scm.com/book/en/v2/Git-Tools-Submodules](https://git-scm.com/book/en/v2/Git-Tools-Submodules)
