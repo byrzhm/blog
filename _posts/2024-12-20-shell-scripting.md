@@ -123,5 +123,6 @@ echo "Prefix changed from '$old_prefix' to '$new_prefix' in $directory."
 
 - [word-frequency](https://leetcode.cn/problems/word-frequency/description/)
 - [Rename multiple files with prefix or suffix in Linux console](https://gist.github.com/aprossi/8880b59c3f52a6ad5ff43b8696f24717)
-
+- [Remove a fixed prefix/suffix from a string in Bash](https://stackoverflow.com/questions/16623835/remove-a-fixed-prefix-suffix-from-a-string-in-bash)
+- [Shell Parameter Expansion](https://www.gnu.org/software/bash/manual/html_node/Shell-Parameter-Expansion.html)
 
