@@ -1,7 +1,7 @@
 ---
 title: Python Tips
 date: 2024-12-20 21:59:00 +0800
-categories: [Python, tips]
+categories: [Programming Languages, Python]
 tags: [python]     # TAG names should always be lowercase
 pin: false
 math: false

@@ -1,8 +1,8 @@
 ---
 title: Git Cheat Sheet
 date: 2024-10-05 13:24:54 +0800
-categories: [Git, Submodule]
-tags: [git]     # TAG names should always be lowercase
+categories: [Toolkits, Git]
+tags: [git cheat sheet]     # TAG names should always be lowercase
 pin: false
 math: false
 mermaid: false

@@ -1,8 +1,8 @@
 ---
 title: Pip in-depth
 date: 2024-10-12 09:42:00 +0800
-categories: [AI, Python]
-tags: [python]     # TAG names should always be lowercase
+categories: [Programming Languages, Python]
+tags: [python, pip]     # TAG names should always be lowercase
 pin: false
 math: false
 mermaid: false

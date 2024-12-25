@@ -1,7 +1,7 @@
 ---
 title: Shell Scripting
 date: 2024-12-20 13:25:00 +0800
-categories: [Scripting, shell]
+categories: [Toolkits, Shell Scripting]
 tags: [shell]     # TAG names should always be lowercase
 pin: false
 math: false

@@ -1,8 +1,8 @@
 ---
 title: Create Template
 date: 2024-10-14 19:17:00 +0800
-categories: [Microsoft Office, Template]
-tags: [lifesaver]     # TAG names should always be lowercase
+categories: [Toolkits, Microsoft Office]
+tags: [template]     # TAG names should always be lowercase
 pin: false
 math: false
 mermaid: false
