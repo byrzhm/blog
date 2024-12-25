@@ -275,5 +275,261 @@ one by one.
 set_module_tensor_to_device(model, param_name, param_device, **set_module_kwargs)
 ```
 
+In `set_module_tensor_to_device`, it uses `torch.Tensor.to` to perform device conversion.
+The following code comes from [documentation](https://pytorch.org/docs/stable/generated/torch.Tensor.to.html),
+which demonstrate the device conversion process.
+
+```python
+tensor = torch.randn(2, 2)  # Initially dtype=float32, device=cpu
+tensor.to(torch.float64)
+
+cuda0 = torch.device('cuda:0')
+tensor.to(cuda0)
+
+tensor.to(cuda0, dtype=torch.float64)
+
+other = torch.randn((), dtype=torch.float64, device=cuda0)
+tensor.to(other, non_blocking=True)
+```
+
+</div>
+</details>
+
+> `AutoTokenizer.from_pretrained` is quite similar, we are not going to study it.
+{: .prompt-info }
+
+### `pipeline`
+
+To enable inference we need to create a `pipeline` object first.
+In `run.py`, we create an object by calling function `pipeline(...)` and assign variable `pipe` to it.
+```python
+pipe = pipeline(
+    "text-generation",
+    model=model,
+    tokenizer=tokenizer,
+    max_new_tokens=512,
+    do_sample=True,
+    temperature=0.7,
+    top_p=0.95,
+    top_k=40,
+    repetition_penalty=1.1
+)
+```
+
+The first argument passed in `pipeline` is `task`, i.e., `"text-generation"`. "text-generation" is a pre-defined task,
+so `check_task` returns a pre-defined pipeline `transformers.pipelines.text_generation.TextGenerationPipeline`
+for "text-generation" task, which is contained in dictionary `targeted_task`.
+```python
+if task in custom_tasks:
+    # ...
+else:
+    normalized_task, targeted_task, task_options = check_task(task)
+    if pipeline_class is None:
+        pipeline_class = targeted_task["impl"]
+```
+
+Actually, `pipeline` will instantiate and return a pre-defined pipeline object.
+Here is the `return` statement of `pipeline` function. The instantiation will trigger
+[`TextGenerationPipeline.__init__`](https://github.com/byrzhm/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/pipelines/text_generation.py#L95)
+and
+[`Pipeline.__init__`](https://github.com/byrzhm/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/pipelines/base.py#L842).
+```python
+return pipeline_class(model=model, framework=framework, task=task, **kwargs)
+```
+
+Now we are ready to run model inference. In `run.py`, we call `pipe(...)` to start inference.
+Pipeline objects implemented special method `__call__`, so we can call it.
+```python
+print(pipe(prompt_template.format(prompt=prompt))[0]['generated_text'])
+```
+
+`Pipeline.__call__` will finally call `Pipeline.run_single`:
+```python
+return self.run_single(inputs, preprocess_params, forward_params, postprocess_params)
+```
+
+`Pipeline.run_single` is quite simple and here it is:
+```python
+def run_single(self, inputs, preprocess_params, forward_params, postprocess_params):
+    model_inputs = self.preprocess(inputs, **preprocess_params)
+    model_outputs = self.forward(model_inputs, **forward_params)
+    outputs = self.postprocess(model_outputs, **postprocess_params)
+    return outputs
+```
+
+First, it converts input prompt `inputs` to tokens `model_inputs` by calling `TextGenerationPipeline.preprocess`.
+Then, it feeds the `model_inputs` to the model and gets the `model_outputs` by calling `Pipeline.forward`.
+Finally, it decodes the `model_outputs` to text by calling `TextGenerationPipeline.postprocess`.
+
+<details>
+    <summary>Click to see more about "TextGenerationPipeline.preprocess"</summary>
+    <div markdown="1">
+
+`TextGenerationPipeline.preprocess` will use `tokenizer` passed in to convert input prompt text to tokens,
+more specifically a sequence of token indices.
+```python
+inputs = self.tokenizer(prefix + prompt_text, return_tensors=self.framework, **tokenizer_kwargs)
+```
+
+</div>
+</details>
+
+
+<details>
+    <summary>Click to see more about "Pipeline.forward"</summary>
+    <div markdown="1">
+
+Here is the implementation of `Pipeline.forward`.
+```python
+with self.device_placement():
+    # ...
+    inference_context = self.get_inference_context()
+    with inference_context():
+        model_inputs = self._ensure_tensor_on_device(model_inputs, device=self.device)
+        model_outputs = self._forward(model_inputs, **forward_params)
+        model_outputs = self._ensure_tensor_on_device(model_outputs, device=torch.device("cpu"))
+# ...
+return model_outputs
+```
+
+Because the input tensors are now in CPU memory, we need to convert it to GPU memory.
+This is implemented by calling `Pipeline._ensure_tensor_on_device`.
+
+Now weights and inputs are fully prepared, we are ready to run inference on GPU.
+This is implemented by calling `TextGenerationPipeline._forward`, which will call
+`LlamaForCausalLM.generate` inside.
+```python
+generated_sequence = self.model.generate(input_ids=input_ids, attention_mask=attention_mask, **generate_kwargs)
+```
+
+The `generated_sequence` is actually a sequence of token indices. Then function returns a dictionary with the
+`generated_sequence`, `input_ids`, and `prompt_text`.
+```python
+return {"generated_sequence": generated_sequence, "input_ids": input_ids, "prompt_text": prompt_text}
+```
+
+Finally, we call `Pipeline._ensure_tensor_on_device` to move the `model_outputs`
+from GPU memory to CPU memory for further operations on CPU.
+
+<details>
+    <summary>Click to see more about "LlamaForCausalLM.generate"</summary>
+    <div markdown="1">
+
+Calling `LlamaForCausalLM.generate` actually goes to `GenerationMixin.generate`.
+
+```python
+# ...
+elif generation_mode in (GenerationMode.SAMPLE, GenerationMode.GREEDY_SEARCH):
+    # 11. expand input_ids with `num_return_sequences` additional sequences per batch
+    input_ids, model_kwargs = self._expand_inputs_for_generation(
+        input_ids=input_ids,
+        expand_size=generation_config.num_return_sequences,
+        is_encoder_decoder=self.config.is_encoder_decoder,
+        **model_kwargs,
+    )
+
+    # 12. run sample (it degenerates to greedy search when `generation_config.do_sample=False`)
+    result = self._sample(
+        input_ids,
+        logits_processor=prepared_logits_processor,
+        stopping_criteria=prepared_stopping_criteria,
+        generation_config=generation_config,
+        synced_gpus=synced_gpus,
+        streamer=streamer,
+        **model_kwargs,
+    )
+# ...
+```
+
+
+`GenerationMixin._sample`
+```python
+        is_prefill = True
+        while self._has_unfinished_sequences(
+            this_peer_finished, synced_gpus, device=input_ids.device, cur_len=cur_len, max_length=max_length
+        ):
+            # prepare model inputs
+            model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
+
+            # prepare variable output controls (note: some models won't accept all output controls)
+            model_inputs.update({"output_attentions": output_attentions} if output_attentions else {})
+            model_inputs.update({"output_hidden_states": output_hidden_states} if output_hidden_states else {})
+
+            if is_prefill:
+                outputs = self(**model_inputs, return_dict=True)
+                is_prefill = False
+            else:
+                outputs = model_forward(**model_inputs, return_dict=True)
+```
+
+The inference is composed of two stages, i.e., prefill stage and decode stage.
+
+```python
+            if is_prefill:
+                outputs = self(**model_inputs, return_dict=True)
+                is_prefill = False
+            else:
+                outputs = model_forward(**model_inputs, return_dict=True)
+```
+
+> What's the difference of `self(...)` and `model_forward`?
+>
+> `self(...)` actually goes to `LlamaForCausalLM.forward`
+{: .prompt-info }
+
+LlamaForCausalLM.forward -> LlamaModel.forward
+    -> Embedding.forward (`input_ids(1, 173)` -> `inputs_embeds(1, 173, 4096)`)
+    -> 
+
+It uses [`torch.nn.functional.scaled_dot_product_attention`](https://pytorch.org/docs/stable/generated/torch.nn.functional.scaled_dot_product_attention.html)
+to calculate the scaled dot product.
+
+```python
+attn_output = torch.nn.functional.scaled_dot_product_attention(
+    query_states,
+    key_states,
+    value_states,
+    attn_mask=causal_mask,
+    dropout_p=self.attention_dropout if self.training else 0.0,
+    is_causal=is_causal,
+)
+```
+
+Here is the next token selection logic in `GenerationMixin._sample`. Because we are doing sample, we fall in the first branch.
+We call [`nn.functional.softmax`](https://pytorch.org/docs/stable/generated/torch.nn.Softmax.html)
+to get the probability distribution of each token and [`torch.multinomial`](https://pytorch.org/docs/stable/generated/torch.multinomial.html)
+to simulate the distribution.
+```python
+# token selection
+if do_sample:
+    probs = nn.functional.softmax(next_token_scores, dim=-1)
+    # TODO (joao): this OP throws "skipping cudagraphs due to ['incompatible ops']", find solution
+    next_tokens = torch.multinomial(probs, num_samples=1).squeeze(1)
+else:
+    next_tokens = torch.argmax(next_token_scores, dim=-1)
+```
+
+</div>
+</details>
+
+</div>
+</details>
+
+
+<details>
+    <summary>Click to see more about "TextGenerationPipeline.postprocess"</summary>
+    <div markdown="1">
+
+What `TextGenerationPipeline.postprocess` does is basically using tokenizer to decode the token index sequence to text.
+
+```python
+# Decode text
+text = self.tokenizer.decode(
+    sequence,
+    skip_special_tokens=True,
+    clean_up_tokenization_spaces=clean_up_tokenization_spaces,
+)
+```
+
 </div>
 </details>
