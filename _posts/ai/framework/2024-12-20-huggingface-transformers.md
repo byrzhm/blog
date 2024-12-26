@@ -1,7 +1,7 @@
 ---
 title: HuggingFace Transformers
 date: 2024-12-20 20:25:00 +0800
-categories: [AI/ML, huggingface]
+categories: [AI, Framework/Library]
 tags: [hugginface, transformers]     # TAG names should always be lowercase
 pin: false
 math: false

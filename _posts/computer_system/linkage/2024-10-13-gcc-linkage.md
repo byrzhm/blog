@@ -1,7 +1,7 @@
 ---
 title: GCC Linkage
 date: 2024-10-13 19:51:00 +0800
-categories: [OS/Compiler, Linkage]
+categories: [Computer System, Linkage]
 tags: [linkage, gcc]     # TAG names should always be lowercase
 pin: false
 math: false

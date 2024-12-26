@@ -1,7 +1,7 @@
 ---
 title: PyTorch Internals
 date: 2024-12-25 13:32:00 +0800
-categories: [AI/ML, Framework]
+categories: [AI, Framework/Library]
 tags: [pytorch]     # TAG names should always be lowercase
 pin: false
 math: false
