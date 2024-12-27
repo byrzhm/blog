@@ -8,10 +8,13 @@ math: false
 mermaid: false
 ---
 
-## Setup Environment
+## TL; DR
 
-Clone the github repository "byrzhm/llama2-hf-start" into local workspace, make sure that your GPU memory is larger than 14GB.
-Run the following commands in terminal.
+The Llama Model forward logic is located in [`LlamaModel.forward`:`src/transformers/models/llama/modeling_llama.py,518-624`](https://github.com/huggingface/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/models/llama/modeling_llama.py#L518C1-L624C60)
+
+## First Setup Your Environment
+
+Clone the github repository "byrzhm/llama2-hf-start" into local workspace. Run the following commands in terminal.
 
 ```bash
 git clone git@github.com:byrzhm/llama2-hf-start.git
@@ -21,76 +24,74 @@ conda create -n llama2 python=3.10
 conda activate llama2
 pip install -r requirements.txt
 ```
+{: .nolineno }
+
+> Please make sure that
+> - your GPU memory is larger than 14GB and
+> - your HuggingFace account has access to the Llama2 models.
+{: .prompt-warning }
 
 ## Choose Your Favourite IDE
 
-You can use vscode, pycharm or other IDE to run python program. Here I use pycharm.
-And I set `Run/Debug Script` to `run.py`, and run the script step by step in debug mode.
+You can use VSCode, PyCharm, or any other IDE to run Python programs. Here I use PyCharm.
+I set the `Run/Debug Script` to `run.py` and run the script step by step in debug mode.
 
-## Details
+## Going Deeper with the Fxxking Source Code
 
-### `AutoModelForCausalLM.from_pretrained`
+### Preparing the Pretrained Model and Tokenizer
 
-The method initialize and return a pytorch model. To initialize, it loads the weights into target device
-(if `device_map` is not set, it will be set to "cpu" as default). If `torch.dtype` is not set,
-it will be set to `torch.float32` as default.
+#### `from_pretrained`
 
-> For 24GB **RTX 4090** GPU and llama2-7B Model, if `torch.dtype` is not set to `torch.float16`, it will cause GPU out of memory.
-> Because 7B model with default FP32 parameter format is 7 * 4 = 28 GB size, which is larger than GPU memory.
+```python
+model_name_or_path = "meta-llama/Llama-2-7b-chat-hf"
+
+# Load model
+model = AutoModelForCausalLM.from_pretrained(
+                model_name_or_path,
+                device_map="cuda",
+                torch_dtype=torch.float16
+        )
+
+tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
+```
+{: file="run.py" .nolineno }
+
+The method `AutoModelForCausalLM.from_pretrained` initializes and returns a PyTorch model.
+To initialize, it loads the weights into the target device (if `device_map` is not set, it will be set to "cpu" as default).
+If `torch.dtype` is not set, it will use `torch.float32` as default.
+
+> For a 24GB **RTX 4090** GPU and llama2-7B Model, if `torch.dtype` is not set to `torch.float16`, it will cause GPU out of memory.
+> Because the 7B model in the default FP32 format requires 7 billion parameters * 4 bytes per parameter = 28 GB, which exceeds the GPU memory capacity.
 {: .prompt-warning }
 
-To fetch the weights and configuration file through Internet or through local cache,
-it uses `cached_file` function, which located in [`src/transformers/utils/hub.py`](https://github.com/byrzhm/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/utils/hub.py#L270C1-L472C25).
+To fetch the weights and configuration file, the model uses the `cached_file` function, which can retrieve them from
+the Internet or a local cache. The `cached_file` function definition is located in
+[`src/transformers/utils/hub.py`](https://github.com/huggingface/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/utils/hub.py#L270C1-L472C25).
 
-To successfully create a pretrained model,  `AutoModelForCausalLM` needs to create a `Config` instance by calling `AutoConfig.from_pretrained` first,
-which is located in [`src/transformers/auto/configuration_auto.py`](https://github.com/byrzhm/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/models/auto/configuration_auto.py#L941C5-L1076C10).
+To successfully create a pretrained model, `AutoModelForCausalLM` needs to create a `Config` instance by calling
+`AutoConfig.from_pretrained` first, which is located in [`src/transformers/auto/configuration_auto.py`](https://github.com/huggingface/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/models/auto/configuration_auto.py#L941C5-L1076C10).
 
-After parsing the configuration file, we know that it is a llama model. So `AutoModelForCasualLM.from_pretrained` will call `LlamaForCasualLM.from_pretrained`,
-see [`src/transformers/models/auto/auto_factory.py`](https://github.com/byrzhm/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/models/auto/auto_factory.py#L564C13-L566C14).
+After parsing the configuration file, we know that it is a **llama** model. So `AutoModelForCausalLM.from_pretrained` will
+call `LlamaForCausalLM.from_pretrained`, see [`src/transformers/models/auto/auto_factory.py`](https://github.com/huggingface/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/models/auto/auto_factory.py#L564C13-L566C14).
 
 ```python
 return model_class.from_pretrained(
     pretrained_model_name_or_path, *model_args, config=config, **hub_kwargs, **kwargs
 )
 ```
+{: .nolineno }
 
-### `LlamaForCausalLM.from_pretrained` 
+> The method `LlamaForCausalLM.from_pretrained` calls `PreTrainedModel.from_pretrained` due to inheritance.
+{: .prompt-info }
 
-When calling `LlamaForCausalLM.from_pretrained`, it actually goes to `PretrainedModel.from_pretrained`.
+#### Fetching Checkpoint and Creating Models
 
-First, pop the kwargs to get the parameters.
-```python
-        # ...
-        torch_dtype = kwargs.pop("torch_dtype", None)
-        # ...
-        device_map = kwargs.pop("device_map", None)
-        # ...
-```
-
-
-If `config` is not provided, it will create a `LlamaConfig` instance by calling `LlamaConfig.from_pretrained`.
-Otherwise, it will deepcopy the `config`.
-```python
-        # Load config if we don't provide a configuration
-        if not isinstance(config, PretrainedConfig):
-            # ...
-        else:
-            # ...
-            config = copy.deepcopy(config)
-
-            kwarg_attn_imp = kwargs.pop("attn_implementation", None)
-            if kwarg_attn_imp is not None:
-                config._attn_implementation = kwarg_attn_imp
-
-            model_kwargs = kwargs
-```
-
-Then it tries to get the weights file, it will first try `"model.safetensors"`. Because Llama-7B-Chat-HF model doesn't
-have `"model.safetensors"` but `"model-00001-of-00002.safetensors"` and `"model-00002-of-00002.safetensors"`, `cached_file`
-will return `None`. So it will try to fetch `model.safetensors.index.json`. After `cached_file` successfully returns the
-path to `model.safetensors.index.json`, it knows that the weights are sharded. Then it will call `get_checkpoint_shard_files`
-to download sharded weights.
-
+It first attempts to get the weights file `"model.safetensors"`. Because Llama-7B-Chat-HF model doesn't
+does not have `"model.safetensors"` but instead has `"model-00001-of-00002.safetensors"` and
+`"model-00002-of-00002.safetensors"`, `cached_file` will return `None`. Therefore, it will attempt to fetch
+`model.safetensors.index.json`. After `cached_file` successfully returns the
+path to `model.safetensors.index.json`, it determines that **the weights are sharded**. Then it will call
+`get_checkpoint_shard_files` to download sharded weights.
 ```python
 # We'll need to download and cache each checkpoint shard if the checkpoint is sharded.
 if is_sharded:
@@ -110,33 +111,35 @@ if is_sharded:
         _commit_hash=commit_hash,
     )
 ```
+{: .nolineno }
 
-After `get_checkpoint_shard_files` complete, `resolved_archive_file` will be
+After `get_checkpoint_shard_files` completes, `resolved_archive_file` will be
 `['/path/to/model-00001-of-00002.safetensors', '/path/to/model-00002-of-00002.safetensors']`,
 and `sharded_metadata` will be the content of `model.safetensors.index.json` plus all the checkpoint keys (e.g., `'lm_head.weight'`).
 
-Then it will instantiate a model. Notice that currently weights are not loaded into CPU or GPU memory.
+Then it will instantiate a model. Notice that **currently weights are not going to be loaded into CPU or GPU memory.**
+To instantiate a `LlamaForCausalLM` instance, three `__init__` functions will be called, they are
+- [`LlamaForCausalLM.__init__`](https://github.com/huggingface/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/models/llama/modeling_llama.py#L755C5-L762C25),
+- [`PreTrainedModel.__init__`](https://github.com/huggingface/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/modeling_utils.py#L1307C5-L1328C85)
+- [`torch.nn.Module.__init__`](https://github.com/pytorch/pytorch/blob/b77406a9ececb8609ec041d16b1b6407353fec3d/torch/nn/modules/module.py#L476C1-L518C46).
 ```python
 with ContextManagers(init_contexts):
     # Let's make sure we don't run the init function of buffer modules
     model = cls(config, *model_args, **model_kwargs)
 ```
-
-Three `__init__` functions are called, they are
-[`LlamaForCausalLM.__init__`](https://github.com/byrzhm/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/models/llama/modeling_llama.py#L755C5-L762C25),
-[`PreTrainedModel.__init__`](https://github.com/byrzhm/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/modeling_utils.py#L1307C5-L1328C85)
-and
-[`torch.nn.Module.__init__`](https://github.com/pytorch/pytorch/blob/b77406a9ececb8609ec041d16b1b6407353fec3d/torch/nn/modules/module.py#L476C1-L518C46).
+{: .nolineno }
 
 
-In `LlamaForCausalLM.__init__`, it creates a `LlamaModel` instance. Three `_init_` functions are called, they are
-[`LlamaModel.__init__`](https://github.com/byrzhm/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/models/llama/modeling_llama.py#L497C5-L511C25),
-[`PreTrainedModel.__init__`](https://github.com/byrzhm/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/modeling_utils.py#L1307C5-L1328C85)
-and
-[`torch.nn.Module.__init__`](https://github.com/pytorch/pytorch/blob/b77406a9ececb8609ec041d16b1b6407353fec3d/torch/nn/modules/module.py#L476C1-L518C46).
+In `LlamaForCausalLM.__init__`, a `LlamaModel` instance is created. To create a `LlamaModel` instance, three `_init_` functions will be called,
+they are
+- [`LlamaModel.__init__`](https://github.com/huggingface/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/models/llama/modeling_llama.py#L497C5-L511C25),
+- [`PreTrainedModel.__init__`](https://github.com/huggingface/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/modeling_utils.py#L1307C5-L1328C85)
+- [`torch.nn.Module.__init__`](https://github.com/pytorch/pytorch/blob/b77406a9ececb8609ec041d16b1b6407353fec3d/torch/nn/modules/module.py#L476C1-L518C46).
+
+#### Loading the Weights into Memory
 
 Now we will load the weights from disk to memory. The loading task is done in
-[`PreTrainedModel._load_pretrained_model`](https://github.com/byrzhm/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/modeling_utils.py#L4391).
+[`PreTrainedModel._load_pretrained_model`](https://github.com/huggingface/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/modeling_utils.py#L4391).
 
 ```python
 with ContextManagers(load_contexts):
@@ -167,9 +170,9 @@ with ContextManagers(load_contexts):
         weights_only=weights_only,
     )
 ```
+{: .nolineno }
 
 The following code fragment actually loads weights into memory.
-
 ```python
 if len(resolved_archive_file) > 1:
     resolved_archive_file = logging.tqdm(resolved_archive_file, desc="Loading checkpoint shards")
@@ -239,6 +242,7 @@ for shard_file in resolved_archive_file:
     del state_dict
     gc.collect()
 ```
+{: .nolineno }
 
 
 <details>
@@ -248,21 +252,21 @@ for shard_file in resolved_archive_file:
 We load the sharded checkpoint files into memory one by one.
 
 First, we need to load the `shard_file` into memory in `state_dict` format by calling
-[`load_state_dict`](https://github.com/byrzhm/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/modeling_utils.py#L493C1-L560C14),
+[`load_state_dict`](https://github.com/huggingface/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/modeling_utils.py#L493C1-L560C14),
 which calls `safe_load_file`, alias of
 [`safetensors.torch.load_file`](https://github.com/huggingface/safetensors/blob/f5839b6aee407652aa3078d91206b618dd84e3c2/bindings/python/py_src/safetensors/torch.py#L289C1-L316C18), inside.
-
 ```python
 state_dict = load_state_dict(
     shard_file, is_quantized=is_quantized, map_location=map_location, weights_only=weights_only
 )
 ```
+{: .nolineno }
 
 If the target device is GPU,
-[`_load_state_dict_into_meta_model`](https://github.com/byrzhm/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/modeling_utils.py#L751)
+[`_load_state_dict_into_meta_model`](https://github.com/huggingface/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/modeling_utils.py#L751)
 will be called.
 If CPU,
-[`_load_state_dict_into_model`](https://github.com/byrzhm/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/modeling_utils.py#L654)
+[`_load_state_dict_into_model`](https://github.com/huggingface/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/modeling_utils.py#L654)
 will be called.
 In most cases, we will use GPU to accelerate inference, so we will examine `_load_state_dict_into_meta_model`.
 
@@ -274,6 +278,7 @@ one by one.
 ```python
 set_module_tensor_to_device(model, param_name, param_device, **set_module_kwargs)
 ```
+{: .nolineno }
 
 In `set_module_tensor_to_device`, it uses `torch.Tensor.to` to perform device conversion.
 The following code comes from [documentation](https://pytorch.org/docs/stable/generated/torch.Tensor.to.html),
@@ -291,6 +296,7 @@ tensor.to(cuda0, dtype=torch.float64)
 other = torch.randn((), dtype=torch.float64, device=cuda0)
 tensor.to(other, non_blocking=True)
 ```
+{: .nolineno }
 
 </div>
 </details>
@@ -298,9 +304,9 @@ tensor.to(other, non_blocking=True)
 > `AutoTokenizer.from_pretrained` is quite similar, we are not going to study it.
 {: .prompt-info }
 
-### `pipeline`
+### Creating a Pipeline for Inference
 
-To enable inference we need to create a `pipeline` object first.
+To enable inference, we first need to create a `pipeline` object.
 In `run.py`, we create an object by calling function `pipeline(...)` and assign variable `pipe` to it.
 ```python
 pipe = pipeline(
@@ -315,10 +321,12 @@ pipe = pipeline(
     repetition_penalty=1.1
 )
 ```
+{: file="run.py" .nolineno }
 
-The first argument passed in `pipeline` is `task`, i.e., `"text-generation"`. "text-generation" is a pre-defined task,
-so `check_task` returns a pre-defined pipeline `transformers.pipelines.text_generation.TextGenerationPipeline`
-for "text-generation" task, which is contained in dictionary `targeted_task`.
+The first argument passed to the `pipeline` function is the `task`, which in this case is `"text-generation"`.
+"text-generation" is a pre-defined task, so `check_task` returns a pre-defined pipeline
+`transformers.pipelines.text_generation.TextGenerationPipeline` for "text-generation" task,
+which is contained in dictionary `targeted_task`.
 ```python
 if task in custom_tasks:
     # ...
@@ -327,26 +335,31 @@ else:
     if pipeline_class is None:
         pipeline_class = targeted_task["impl"]
 ```
+{: .nolineno }
 
-Actually, `pipeline` will instantiate and return a pre-defined pipeline object.
+`pipeline` will instantiate and return a pre-defined pipeline object.
 Here is the `return` statement of `pipeline` function. The instantiation will trigger
-[`TextGenerationPipeline.__init__`](https://github.com/byrzhm/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/pipelines/text_generation.py#L95)
-and
-[`Pipeline.__init__`](https://github.com/byrzhm/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/pipelines/base.py#L842).
+[`TextGenerationPipeline.__init__`](https://github.com/huggingface/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/pipelines/text_generation.py#L95)
+and [`Pipeline.__init__`](https://github.com/huggingface/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/pipelines/base.py#L842).
 ```python
 return pipeline_class(model=model, framework=framework, task=task, **kwargs)
 ```
+{: .nolineno }
 
-Now we are ready to run model inference. In `run.py`, we call `pipe(...)` to start inference.
+### Starting Inference
+
+Now we are ready to run the model inference using the pipeline object. In `run.py`, we call `pipe(...)` to start inference.
 Pipeline objects implemented special method `__call__`, so we can call it.
 ```python
 print(pipe(prompt_template.format(prompt=prompt))[0]['generated_text'])
 ```
+{: file="run.py" .nolineno }
 
-`Pipeline.__call__` will finally call `Pipeline.run_single`:
+`Pipeline.__call__` will finally go to `Pipeline.run_single`:
 ```python
 return self.run_single(inputs, preprocess_params, forward_params, postprocess_params)
 ```
+{: .nolineno }
 
 `Pipeline.run_single` is quite simple and here it is:
 ```python
@@ -356,20 +369,23 @@ def run_single(self, inputs, preprocess_params, forward_params, postprocess_para
     outputs = self.postprocess(model_outputs, **postprocess_params)
     return outputs
 ```
+{: .nolineno }
 
-First, it converts input prompt `inputs` to tokens `model_inputs` by calling `TextGenerationPipeline.preprocess`.
-Then, it feeds the `model_inputs` to the model and gets the `model_outputs` by calling `Pipeline.forward`.
-Finally, it decodes the `model_outputs` to text by calling `TextGenerationPipeline.postprocess`.
+The `Pipeline.run_single` method involves three main steps: preprocessing the input, running the model, and postprocessing the output.
+- First, it converts input prompt `inputs` to tokens `model_inputs` by calling `TextGenerationPipeline.preprocess`.
+- Then, it feeds the `model_inputs` to the model and gets the `model_outputs` by calling `Pipeline.forward`.
+- Finally, it decodes the `model_outputs` to text by calling `TextGenerationPipeline.postprocess`.
 
 <details>
     <summary>Click to see more about "TextGenerationPipeline.preprocess"</summary>
     <div markdown="1">
 
 `TextGenerationPipeline.preprocess` will use `tokenizer` passed in to convert input prompt text to tokens,
-more specifically a sequence of token indices.
+more precisely a sequence of token indices.
 ```python
 inputs = self.tokenizer(prefix + prompt_text, return_tensors=self.framework, **tokenizer_kwargs)
 ```
+{: .nolineno }
 
 </div>
 </details>
@@ -391,32 +407,35 @@ with self.device_placement():
 # ...
 return model_outputs
 ```
+{: .nolineno }
 
-Because the input tensors are now in CPU memory, we need to convert it to GPU memory.
+First, we need to ensure that the input tensors have been moved from CPU to GPU memory.
 This is implemented by calling `Pipeline._ensure_tensor_on_device`.
 
-Now weights and inputs are fully prepared, we are ready to run inference on GPU.
+Now weights and inputs are fully prepared. We are ready to run inference on GPU.
 This is implemented by calling `TextGenerationPipeline._forward`, which will call
 `LlamaForCausalLM.generate` inside.
 ```python
 generated_sequence = self.model.generate(input_ids=input_ids, attention_mask=attention_mask, **generate_kwargs)
 ```
+{: .nolineno }
 
 The `generated_sequence` is actually a sequence of token indices. Then function returns a dictionary with the
 `generated_sequence`, `input_ids`, and `prompt_text`.
 ```python
 return {"generated_sequence": generated_sequence, "input_ids": input_ids, "prompt_text": prompt_text}
 ```
+{: .nolineno }
 
-Finally, we call `Pipeline._ensure_tensor_on_device` to move the `model_outputs`
-from GPU memory to CPU memory for further operations on CPU.
+Finally, we call `Pipeline._ensure_tensor_on_device` to ensure that the `model_outputs`
+has been moved from GPU memory to CPU memory for further operations on CPU.
 
 <details>
     <summary>Click to see more about "LlamaForCausalLM.generate"</summary>
     <div markdown="1">
 
 Calling `LlamaForCausalLM.generate` actually goes to `GenerationMixin.generate`.
-
+Under the `TextGenerationPipeline` configuration, it falls to the following branch.
 ```python
 # ...
 elif generation_mode in (GenerationMode.SAMPLE, GenerationMode.GREEDY_SEARCH):
@@ -440,74 +459,39 @@ elif generation_mode in (GenerationMode.SAMPLE, GenerationMode.GREEDY_SEARCH):
     )
 # ...
 ```
+{: .nolineno }
 
 
-`GenerationMixin._sample`
+Here is the main loop in the LLM inference process, where the model processes input tokens in stages
+(prefill and decode) to generate the next token until the sequence is complete.
 ```python
-        is_prefill = True
-        while self._has_unfinished_sequences(
-            this_peer_finished, synced_gpus, device=input_ids.device, cur_len=cur_len, max_length=max_length
-        ):
-            # prepare model inputs
-            model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
+is_prefill = True
+while self._has_unfinished_sequences(
+    this_peer_finished, synced_gpus, device=input_ids.device, cur_len=cur_len, max_length=max_length
+):
+    # prepare model inputs
+    model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
 
-            # prepare variable output controls (note: some models won't accept all output controls)
-            model_inputs.update({"output_attentions": output_attentions} if output_attentions else {})
-            model_inputs.update({"output_hidden_states": output_hidden_states} if output_hidden_states else {})
+    # prepare variable output controls (note: some models won't accept all output controls)
+    model_inputs.update({"output_attentions": output_attentions} if output_attentions else {})
+    model_inputs.update({"output_hidden_states": output_hidden_states} if output_hidden_states else {})
 
-            if is_prefill:
-                outputs = self(**model_inputs, return_dict=True)
-                is_prefill = False
-            else:
-                outputs = model_forward(**model_inputs, return_dict=True)
+    if is_prefill:
+        outputs = self(**model_inputs, return_dict=True)
+        is_prefill = False
+    else:
+        outputs = model_forward(**model_inputs, return_dict=True)
+    # ...
+    # concat
 ```
+{: .nolineno }
 
-The inference is composed of two stages, i.e., prefill stage and decode stage.
-
-```python
-            if is_prefill:
-                outputs = self(**model_inputs, return_dict=True)
-                is_prefill = False
-            else:
-                outputs = model_forward(**model_inputs, return_dict=True)
-```
-
-> What's the difference of `self(...)` and `model_forward`?
+> The `self(...)` call within the loop and the `model_forward` function both invoke the `LlamaForCausalLM.forward` method,
+> which processes the input tokens through the model layers to generate the next token in the sequence.
 >
-> `self(...)` actually goes to `LlamaForCausalLM.forward`
+> `LlamaForCausalLM.forward` will call `LlamaModel.forward`. `LlamaModel.forward` will call
+> `Embedding.forward`, `LlamaRotaryEmbedding.forward`, ..., see [`LlamaModel.forward` implementation](https://github.com/huggingface/transformers/blob/93aafdc620d39b9ec714ffecf015a085ea221282/src/transformers/models/llama/modeling_llama.py#L518C1-L624C60).
 {: .prompt-info }
-
-LlamaForCausalLM.forward -> LlamaModel.forward
-    -> Embedding.forward (`input_ids(1, 173)` -> `inputs_embeds(1, 173, 4096)`)
-    -> 
-
-It uses [`torch.nn.functional.scaled_dot_product_attention`](https://pytorch.org/docs/stable/generated/torch.nn.functional.scaled_dot_product_attention.html)
-to calculate the scaled dot product.
-
-```python
-attn_output = torch.nn.functional.scaled_dot_product_attention(
-    query_states,
-    key_states,
-    value_states,
-    attn_mask=causal_mask,
-    dropout_p=self.attention_dropout if self.training else 0.0,
-    is_causal=is_causal,
-)
-```
-
-Here is the next token selection logic in `GenerationMixin._sample`. Because we are doing sample, we fall in the first branch.
-We call [`nn.functional.softmax`](https://pytorch.org/docs/stable/generated/torch.nn.Softmax.html)
-to get the probability distribution of each token and [`torch.multinomial`](https://pytorch.org/docs/stable/generated/torch.multinomial.html)
-to simulate the distribution.
-```python
-# token selection
-if do_sample:
-    probs = nn.functional.softmax(next_token_scores, dim=-1)
-    # TODO (joao): this OP throws "skipping cudagraphs due to ['incompatible ops']", find solution
-    next_tokens = torch.multinomial(probs, num_samples=1).squeeze(1)
-else:
-    next_tokens = torch.argmax(next_token_scores, dim=-1)
-```
 
 </div>
 </details>
@@ -530,6 +514,42 @@ text = self.tokenizer.decode(
     clean_up_tokenization_spaces=clean_up_tokenization_spaces,
 )
 ```
+{: .nolineno }
 
 </div>
 </details>
+
+## Additional Details
+
+### Implementation of Attention Machanism
+
+It uses [`torch.nn.functional.scaled_dot_product_attention`](https://pytorch.org/docs/stable/generated/torch.nn.functional.scaled_dot_product_attention.html)
+to calculate the scaled dot product.
+
+```python
+attn_output = torch.nn.functional.scaled_dot_product_attention(
+    query_states,
+    key_states,
+    value_states,
+    attn_mask=causal_mask,
+    dropout_p=self.attention_dropout if self.training else 0.0,
+    is_causal=is_causal,
+)
+```
+{: .nolineno }
+
+### Implementation of Sampling
+
+We call [`nn.functional.softmax`](https://pytorch.org/docs/stable/generated/torch.nn.Softmax.html)
+to get the probability distribution of each token and [`torch.multinomial`](https://pytorch.org/docs/stable/generated/torch.multinomial.html)
+to simulate the distribution.
+```python
+# token selection
+if do_sample:
+    probs = nn.functional.softmax(next_token_scores, dim=-1)
+    # TODO (joao): this OP throws "skipping cudagraphs due to ['incompatible ops']", find solution
+    next_tokens = torch.multinomial(probs, num_samples=1).squeeze(1)
+else:
+    next_tokens = torch.argmax(next_token_scores, dim=-1)
+```
+{: .nolineno }
