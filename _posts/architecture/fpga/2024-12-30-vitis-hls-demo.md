@@ -1,5 +1,5 @@
 ---
-title: Vitis HLS for Transformer Acceleration (Part I)
+title: Vitis HLS Demo (GEMV)
 date: 2024-12-30 20:10:00 +0800
 categories: [Architecture, FPGA]
 tags: [vitis application acceleration, fpga, software/hardware co-design, hls]     # TAG names should always be lowercase
@@ -8,9 +8,7 @@ math: false
 mermaid: false
 ---
 
-## GEMV and GEMM
-
-### GEMV
+## GEMV
 
 We will use load/compute/store coding style which is generally the most efficient
 for implementing kernels using HLS.
@@ -309,10 +307,7 @@ struct aligned_allocator
 ```
 {: file='xcl2.hpp' }
 
-### GEMM
 
-We often uses **systolic arrary** to accelerate GEMM.
+> We often uses **systolic arrary** to accelerate GEMM.
+{: .prompt-info }
 
-## References
-
-- [cornell-zhang/allo-pldi24-artifact](https://github.com/cornell-zhang/allo-pldi24-artifact)
