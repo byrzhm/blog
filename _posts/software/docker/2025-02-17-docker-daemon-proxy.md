@@ -40,11 +40,14 @@ Configuration using `daemon.json` is recommended.
 {
     "proxies": {
         "http-proxy": "http://proxy.example.com:3128",
-        "https-proxy": "https://proxy.example.com:3129", // or "http://..."
+        "https-proxy": "https://proxy.example.com:3129",
         "no-proxy": "*.test.example.com,.example.org,127.0.0.0/8"
     }
 }
 ```
+
+> `HTTPS_PROXY` can start with `http://`.
+{: .prompt-info }
 
 After changing the configuration file, restart the daemon for the proxy configuration to take effect:
 
