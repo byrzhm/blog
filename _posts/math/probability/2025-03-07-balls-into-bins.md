@@ -1,7 +1,7 @@
 ---
 title: Balls into bins
 date: 2025-03-07 19:38:00 +0800
-categories: [Misc, Probability]
+categories: [Math, Probability]
 tags: [balls-into-bins]     # TAG names should always be lowercase
 pin: false
 math: true
