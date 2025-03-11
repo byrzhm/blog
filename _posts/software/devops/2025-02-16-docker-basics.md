@@ -1,7 +1,7 @@
 ---
 title: Docker Basics
 date: 2025-02-16 21:16:00 +0800
-categories: [Software, Docker]
+categories: [Software, DevOps]
 tags: [docker]     # TAG names should always be lowercase
 pin: false
 math: false

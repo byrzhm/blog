@@ -1,7 +1,7 @@
 ---
 title: Use a proxy server with the Docker CLI
 date: 2025-02-17 17:51:00 +0800
-categories: [Software, Docker]
+categories: [Software, DevOps]
 tags: [docker]     # TAG names should always be lowercase
 pin: false
 math: false
