@@ -8,6 +8,12 @@ math: false
 mermaid: false
 ---
 
+## Paper Reading
+
+```plaintext
+In paper XXX Section XXX, it says "XXX". Can you break it down and explain it in detail?
+```
+
 ## Weekly Reports
 
 ```plaintext
