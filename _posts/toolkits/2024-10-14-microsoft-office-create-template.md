@@ -15,3 +15,7 @@ See [https://support.microsoft.com/en-us/office/create-and-save-a-powerpoint-tem
 ## Create Word Templates
 
 See [https://support.microsoft.com/en-us/office/create-a-template-86a1d089-5ae2-4d53-9042-1191bce57deb](https://support.microsoft.com/en-us/office/create-a-template-86a1d089-5ae2-4d53-9042-1191bce57deb)
+
+## Templates
+
+- [PowerPoint Templates](https://create.microsoft.com/en-us/search?query=PowerPoint)
