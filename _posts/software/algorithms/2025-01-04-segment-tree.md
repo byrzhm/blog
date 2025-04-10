@@ -1,8 +1,8 @@
 ---
 title: Segment Tree
 date: 2025-01-04 15:32:00 +0800
-categories: [Software, Competitive Programming]
-tags: [competitive programming, segment tree]     # TAG names should always be lowercase
+categories: [Software, Algorithms]
+tags: [algorithms, segment tree]     # TAG names should always be lowercase
 pin: false
 math: false
 mermaid: false
